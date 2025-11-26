@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+requests
+beautifulsoup4
+gspread
+oauth2client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+pydantic
+subprocess32
