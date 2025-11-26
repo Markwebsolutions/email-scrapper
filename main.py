@@ -135,7 +135,9 @@ async def run_fb_scraper():
     asyncio.create_task(stream_logs([
         "node", script,
         f"--key={SERVICE_JSON}",
-        f"--sheet={sheet}"
+        f"--sheet={sheet}",
+        "--no-sandbox",
+    "--disable-setuid-sandbox"
     ]))
 
     return {"status": "started"}

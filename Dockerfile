@@ -1,38 +1,34 @@
 FROM nikolaik/python-nodejs:python3.10-nodejs18
 
-# Install Chromium + its dependencies
+# Install Chromium dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
-    libglib2.0-0 \
+    fonts-liberation \
     libnss3 \
-    libxss1 \
-    libatk1.0-0 \
     libatk-bridge2.0-0 \
+    libatk1.0-0 \
     libx11-xcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libpangocairo-1.0-0 \
-    libpango-1.0-0 \
-    libgtk-3-0 \
     xdg-utils \
-    fonts-liberation && \
-    rm -rf /var/lib/apt/lists/*
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
+# Set Puppeteer env
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
+# Create app directory
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
-
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
+# Copy Python backend
 COPY . .
 
+# Install Node dependencies
+RUN npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth googleapis minimist p-limit
+
+# Install Python dependencies
+RUN pip install fastapi uvicorn aiofiles
+
 EXPOSE 8080
-CMD ["python", "main.py"]
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
