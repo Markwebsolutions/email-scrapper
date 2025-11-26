@@ -1,3 +1,4 @@
+# Base image
 FROM nikolaik/python-nodejs:python3.10-nodejs18
 
 # Install Chromium dependencies
@@ -10,25 +11,23 @@ RUN apt-get update && apt-get install -y \
     libatk1.0-0 \
     libx11-xcb1 \
     xdg-utils \
-    wget \
-    unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Puppeteer env
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-
-# Create app directory
+# Set working directory
 WORKDIR /app
 
-# Copy Python backend
-COPY . .
+# Copy Python files
+COPY ./ /app
+
+# Install Python dependencies
+RUN pip install --upgrade pip
+RUN pip install fastapi uvicorn aiofiles python-multipart
 
 # Install Node dependencies
 RUN npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth googleapis minimist p-limit
 
-# Install Python dependencies
-RUN pip install fastapi uvicorn aiofiles
-
+# Expose port
 EXPOSE 8080
 
+# Run FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
