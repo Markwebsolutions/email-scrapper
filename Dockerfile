@@ -1,4 +1,4 @@
-# Base image
+# Base image with Python + Node
 FROM nikolaik/python-nodejs:python3.10-nodejs18
 
 # Install Chromium dependencies
@@ -16,12 +16,12 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy Python files
+# Copy all files
 COPY ./ /app
 
 # Install Python dependencies
 RUN pip install --upgrade pip
-RUN pip install fastapi uvicorn aiofiles python-multipart
+RUN pip install fastapi uvicorn aiofiles python-multipart requests beautifulsoup4 gspread oauth2client google-auth google-auth-oauthlib google-auth-httplib2 pydantic
 
 # Install Node dependencies
 RUN npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth googleapis minimist p-limit
