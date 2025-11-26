@@ -34,4 +34,5 @@ COPY . .
 EXPOSE 8080
 
 # Start Python API + allow JS scripts when called
+# Use shell form to expand $PORT correctly
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
