@@ -4,12 +4,13 @@ const puppeteer = require("puppeteer");
 const { google } = require("googleapis");
 const pLimit = require("p-limit").default;
 const minimist = require("minimist");
+const path = require("path");
+const fs = require("fs");
 
 puppeteerExtra.use(stealth());
 
 const argv = minimist(process.argv.slice(2));
-
-const SERVICE_JSON = argv.key || "service_account.json";
+const SERVICE_JSON = argv.key || path.join(__dirname, "service_account.json");
 const SPREADSHEET_ID = argv.sheet;
 
 if (!SPREADSHEET_ID) {
@@ -34,27 +35,25 @@ async function getSheets() {
 // -----------------------------------------
 async function getFacebookLinks() {
     const sheets = await getSheets();
-
     const res = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
         range: "Sheet1!A1:Z9999",
     });
 
     const rows = res.data.values || [];
-    const header = rows[0] || [];
-
+    if (!rows.length) throw "Spreadsheet is empty!";
+    
+    const header = rows[0];
     const fbIndex = header.indexOf("Facebook Link");
     const emailIndex = header.indexOf("Business Email");
 
     if (fbIndex === -1) throw "Facebook Link column missing!";
     if (emailIndex === -1) throw "Business Email column missing!";
 
-    let list = [];
-
+    const list = [];
     for (let i = 1; i < rows.length; i++) {
-        let fb = rows[i][fbIndex];
-        if (fb && fb.trim() !== "")
-            list.push({ row: i + 1, url: fb });
+        const fb = rows[i][fbIndex];
+        if (fb && fb.trim()) list.push({ row: i + 1, url: fb.trim() });
     }
 
     console.log(`Found ${list.length} Facebook URLs`);
@@ -81,8 +80,8 @@ async function scrapeFacebookEmail(url, browser) {
         );
 
         console.log(`Visiting ${url}`);
-        await page.goto(url, { waitUntil: "networkidle2" });
-        await new Promise(res => setTimeout(res, 3000));
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+        await page.waitForTimeout(3000);
 
         const html = await page.content();
         await page.close();
@@ -90,7 +89,7 @@ async function scrapeFacebookEmail(url, browser) {
         return extractEmail(html);
 
     } catch (err) {
-        console.log("Error:", err.message);
+        console.warn(`Error visiting ${url}: ${err.message}`);
         return "";
     }
 }
@@ -113,23 +112,25 @@ function colLetter(n) {
 // -----------------------------------------
 async function writeEmail(row, email, emailIndex) {
     const sheets = await getSheets();
-
     const col = colLetter(emailIndex + 1);
 
-    await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Sheet1!${col}${row}`,
-        valueInputOption: "RAW",
-        requestBody: { values: [[email]] }
-    });
-
-    console.log(`Saved ${email} → row ${row}`);
+    try {
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `Sheet1!${col}${row}`,
+            valueInputOption: "RAW",
+            requestBody: { values: [[email]] },
+        });
+        console.log(`Saved ${email} → row ${row}`);
+    } catch (err) {
+        console.warn(`Failed to write email at row ${row}: ${err.message}`);
+    }
 }
 
 // -----------------------------------------
 // MAIN SCRIPT
 // -----------------------------------------
-async function main() {
+(async function main() {
     console.log("FB scraper started");
 
     const { list, emailIndex } = await getFacebookLinks();
@@ -137,32 +138,24 @@ async function main() {
     const browser = await puppeteerExtra.launch({
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-        args: ["--no-sandbox", "--disable-setuid-sandbox"]
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
-    const limit = pLimit(7);
+    const limit = pLimit(5); // concurrency limit for reliability
 
     const tasks = list.map(item =>
         limit(async () => {
             console.log(`Row ${item.row} — ${item.url}`);
-
             const email = await scrapeFacebookEmail(item.url, browser);
-
-            if (email)
-                console.log(`Found email: ${email}`);
-            else
-                console.log(`No email found`);
-
+            if (email) console.log(`Found email: ${email}`);
+            else console.log(`No email found`);
             await writeEmail(item.row, email, emailIndex);
-
             await new Promise(res => setTimeout(res, 1500 + Math.random() * 1500));
         })
     );
 
     await Promise.all(tasks);
-
     await browser.close();
-    console.log("Facebook scraper complete");
-}
 
-main();
+    console.log("Facebook scraper complete");
+})();

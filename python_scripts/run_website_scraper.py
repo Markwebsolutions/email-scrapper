@@ -11,9 +11,16 @@ from oauth2client.service_account import ServiceAccountCredentials
 from urllib.parse import urljoin, urlparse
 
 # ================================
+# BASE PATHS
+# ================================
+BASE_DIR = os.getcwd()
+SHEET_ID_FILE = os.path.join(BASE_DIR, "storage", "sheet_id.txt")
+SERVICE_JSON = os.path.join(BASE_DIR, "service_account.json")
+
+# ================================
 # READ SHEET ID
 # ================================
-with open("storage/sheet_id.txt") as f:
+with open(SHEET_ID_FILE) as f:
     SHEET_ID = f.read().strip()
 
 # ================================
@@ -24,7 +31,7 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_JSON, scope)
 client = gspread.authorize(creds)
 
 sheet = client.open_by_key(SHEET_ID).sheet1
@@ -67,13 +74,14 @@ def regex_emails(text):
 # ================================
 def scrape_page(url):
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(r.text, "html.parser")
         emails = extract_mailto_emails(r.text, soup)
         if emails:
             print(f"Email found on page {url}: {emails}", flush=True)
         return emails
-    except:
+    except Exception as e:
+        print(f"Error scraping {url}: {e}", flush=True)
         return []
 
 # ================================
@@ -84,16 +92,12 @@ def find_specific_links(base_url, soup):
     about = None
     for a in soup.find_all("a", href=True):
         href = a["href"].lower()
-
         if contact is None and ("contact" in href or "contact-us" in href):
             contact = urljoin(base_url, href)
-
         if about is None and ("about" in href or "about-us" in href):
             about = urljoin(base_url, href)
-
         if contact and about:
             break
-
     return contact, about
 
 # ================================
@@ -104,19 +108,15 @@ def extract_facebook_email(url):
         return []
     
     print("Checking Facebook:", url, flush=True)
-
     try:
         r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
         html = r.text.lower()
-    except:
+    except Exception as e:
+        print(f"Error fetching FB page {url}: {e}", flush=True)
         return []
 
     emails = set()
-    sections = [
-        "page_about_info", "page_info", "email",
-        "contact info", "\"description\":"
-    ]
-
+    sections = ["page_about_info", "page_info", "email", "contact info", "\"description\":"]
     for key in sections:
         if key in html:
             start = html.find(key)
@@ -125,7 +125,6 @@ def extract_facebook_email(url):
             if found:
                 print(f"Found FB email: {found}", flush=True)
                 emails.update(found)
-
     return list(emails)
 
 # ================================
@@ -136,26 +135,27 @@ def extract_emails(url):
         return "", ""
 
     print("Scraping:", url, flush=True)
-
     emails = set()
     fb_link_saved = ""
 
-    # Try homepage first
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(r.text, "html.parser")
         homepage_emails = extract_mailto_emails(r.text, soup)
         if homepage_emails:
             print(f"Homepage emails: {homepage_emails}", flush=True)
             return ", ".join(homepage_emails), fb_link_saved
-    except:
-        pass
+    except Exception as e:
+        print(f"Error fetching homepage {url}: {e}", flush=True)
+        soup = None
 
     # Contact/About pages
-    try:
-        contact_url, about_url = find_specific_links(url, soup)
-    except:
-        contact_url = about_url = None
+    contact_url = about_url = None
+    if soup:
+        try:
+            contact_url, about_url = find_specific_links(url, soup)
+        except:
+            pass
 
     if contact_url:
         found = scrape_page(contact_url)
@@ -169,16 +169,17 @@ def extract_emails(url):
 
     # Facebook links
     fb_links = []
-    try:
-        for a in soup.find_all("a", href=True):
-            href = a["href"].lower()
-            if "facebook.com" in href or "fb.com" in href:
-                full = urljoin(url, href)
-                fb_links.append(full)
-                if not fb_link_saved:
-                    fb_link_saved = full
-    except:
-        pass
+    if soup:
+        try:
+            for a in soup.find_all("a", href=True):
+                href = a["href"].lower()
+                if "facebook.com" in href or "fb.com" in href:
+                    full = urljoin(url, href)
+                    fb_links.append(full)
+                    if not fb_link_saved:
+                        fb_link_saved = full
+        except:
+            pass
 
     for fb in fb_links:
         fb_emails = extract_facebook_email(fb)
@@ -186,7 +187,6 @@ def extract_emails(url):
             return ", ".join(fb_emails), ""
 
     return "", fb_link_saved
-
 
 # ================================
 # PROCESS ALL ROWS
@@ -197,15 +197,18 @@ fb_list = []
 for i, row in df.iterrows():
     site = clean_url(row.get("Business Website"))
     email, fb = extract_emails(site)
-
     emails_list.append(email)
     fb_list.append(fb)
 
-# Save data
 df["Business Email"] = emails_list
 df["Facebook Link"] = fb_list
 
-sheet.clear()
-sheet.update([df.columns.values.tolist()] + df.values.tolist())
-
-print("DONE! Website scraper completed.", flush=True)
+# ================================
+# SAVE BACK TO SHEET
+# ================================
+try:
+    sheet.clear()
+    sheet.update([df.columns.values.tolist()] + df.values.tolist())
+    print("DONE! Website scraper completed.", flush=True)
+except Exception as e:
+    print(f"Error saving to Google Sheet: {e}", flush=True)
