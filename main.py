@@ -1,20 +1,23 @@
 import asyncio
 import subprocess
-import sys
+import os
 from fastapi import FastAPI, UploadFile, WebSocket, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 app = FastAPI()
-
 app.state.websocket = None
 
+# Paths and environment
 SERVICE_JSON = "service_account.json"
-SHEET_ID = "storage/sheet_id.txt"
+SHEET_ID_FILE = "storage/sheet_id.txt"
+SHEET_ID_ENV = os.environ.get("SHEET_ID")  # optional env variable
+
+# Ensure storage folder exists
+os.makedirs("storage", exist_ok=True)
 
 # Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 # ---------------------------------------
 # Home
@@ -22,7 +25,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 def home():
     return FileResponse("static/index.html")
-
 
 # ---------------------------------------
 # Upload service account JSON
@@ -34,16 +36,16 @@ async def upload_json(file: UploadFile):
         f.write(content)
     return {"status": "ok"}
 
-
 # ---------------------------------------
 # Save Sheet ID
 # ---------------------------------------
 @app.post("/save-sheet-id")
 async def save_sheet_id(sheet_id: str = Form(...)):
-    with open(SHEET_ID, "w") as f:
-        f.write(sheet_id)
+    # Save to file only if env variable not set
+    if SHEET_ID_ENV is None:
+        with open(SHEET_ID_FILE, "w") as f:
+            f.write(sheet_id)
     return {"status": "ok"}
-
 
 # ---------------------------------------
 # WebSocket for logs
@@ -52,20 +54,16 @@ async def save_sheet_id(sheet_id: str = Form(...)):
 async def logs_socket(ws: WebSocket):
     await ws.accept()
     app.state.websocket = ws
-
     try:
         while True:
             await ws.receive_text()  # keep alive
     except:
         app.state.websocket = None
 
-
 # ---------------------------------------
-# Stream logs: Windows-safe version
+# Stream logs
 # ---------------------------------------
 async def stream_logs(cmd):
-
-    # Start subprocess normally (Windows safe)
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -73,21 +71,16 @@ async def stream_logs(cmd):
         text=True,
         bufsize=1
     )
-
-    # Read output line-by-line from a separate thread
     while True:
         line = await asyncio.to_thread(process.stdout.readline)
         if not line:
             break
-
         if app.state.websocket:
             try:
                 await app.state.websocket.send_text(line)
             except:
                 pass
-
     process.wait()
-
 
 # ---------------------------------------
 # Run Website Scraper (Python)
@@ -99,14 +92,20 @@ async def run_web_scraper():
     ]))
     return {"status": "started"}
 
-
 # ---------------------------------------
 # Run Facebook Scraper (Node.js)
 # ---------------------------------------
 @app.post("/run-facebook-scraper")
 async def run_fb_scraper():
-
-    sheet = open(SHEET_ID).read().strip()
+    # Determine Sheet ID
+    if SHEET_ID_ENV:
+        sheet = SHEET_ID_ENV
+    else:
+        if os.path.exists(SHEET_ID_FILE):
+            with open(SHEET_ID_FILE) as f:
+                sheet = f.read().strip()
+        else:
+            return {"status": "error", "message": "Sheet ID not set"}
 
     asyncio.create_task(stream_logs([
         "node", "node_scripts/facebook_scraper.js",
@@ -114,7 +113,6 @@ async def run_fb_scraper():
         f"--sheet={sheet}"
     ]))
     return {"status": "started"}
-
 
 # ---------------------------------------
 # Run Email Filter (Python)
@@ -127,10 +125,7 @@ async def run_filter():
     return {"status": "started"}
 
 
-import os
-import uvicorn
-
 if __name__ == "__main__":
-    # Get port from environment variable set by Railway, default to 8080 for local testing
     port = int(os.environ.get("PORT", 8080))
+    import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=port)
