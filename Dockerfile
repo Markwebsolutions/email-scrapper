@@ -3,7 +3,7 @@ FROM nikolaik/python-nodejs:python3.10-nodejs18
 # Install Chromium and dependencies
 
 RUN apt-get update && apt-get install -y 
-chromium 
+chromium-browser 
 chromium-driver 
 fonts-liberation 
 libnss3 
@@ -15,7 +15,7 @@ xdg-utils
 
 # Puppeteer executable path
 
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Set working directory
 
@@ -39,6 +39,6 @@ COPY . .
 
 EXPOSE 8080
 
-# Run the app, using PORT from environment or default 8080
+# Run the app using shell form so $PORT is expanded
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
