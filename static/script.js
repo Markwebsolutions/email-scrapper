@@ -31,16 +31,16 @@ async function saveSheetID() {
 
 // Run scrapers
 async function runWebsiteScraper() {
-    await fetch("/run-website-scraper", { method: "POST" });
+    await fetch("/app/python_scripts/run-website-scraper", { method: "POST" });
     appendLog("Website Scraper Started");
 }
 
 async function runFacebookScraper() {
-    await fetch("/run-facebook-scraper", { method: "POST" });
+    await fetch("/app/node_scripts/facebook_scraper.js", { method: "POST" });
     appendLog("Facebook Scraper Started");
 }
 
 async function runEmailFilter() {
-    await fetch("/run-email-filter", { method: "POST" });
+    await fetch("/app/python_scripts/run-email-filter", { method: "POST" });
     appendLog("Email Filter Started");
 }
