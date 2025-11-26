@@ -26,21 +26,21 @@ async function saveSheetID() {
     form.append("sheet_id", id);
 
     await fetch("/save-sheet-id", { method: "POST", body: form });
-    appendLog("Sheet ID saved");
+    appendLog("Sheet ID Saved");
 }
 
-// Run scripts
+// Run scrapers
 async function runWebsiteScraper() {
-    appendLog("Starting Website Scraper...");
     await fetch("/run-website-scraper", { method: "POST" });
+    appendLog("Website Scraper Started");
 }
 
 async function runFacebookScraper() {
-    appendLog("Starting Facebook Scraper...");
     await fetch("/run-facebook-scraper", { method: "POST" });
+    appendLog("Facebook Scraper Started");
 }
 
 async function runEmailFilter() {
-    appendLog("Starting Email Filter...");
     await fetch("/run-email-filter", { method: "POST" });
+    appendLog("Email Filter Started");
 }
