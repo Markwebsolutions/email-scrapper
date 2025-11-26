@@ -1,21 +1,21 @@
 FROM nikolaik/python-nodejs:python3.10-nodejs18
 
-# Install Chromium and dependencies
+# Install Chromium and dependencies (Debian-compatible)
 
 RUN apt-get update && apt-get install -y 
-chromium-browser 
+chromium 
 chromium-driver 
 fonts-liberation 
 libnss3 
 libatk-bridge2.0-0 
 libatk1.0-0 
 libx11-xcb1 
-xdg-utils 
-&& rm -rf /var/lib/apt/lists/*
+xdg-utils && 
+rm -rf /var/lib/apt/lists/*
 
 # Puppeteer executable path
 
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Set working directory
 
