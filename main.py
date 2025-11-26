@@ -88,7 +88,7 @@ async def stream_logs(cmd):
 @app.post("/run-website-scraper")
 async def run_web_scraper():
     asyncio.create_task(stream_logs([
-        "python", "python_scripts/run_website_scraper.py"
+        "python", "/app/python_scripts/run_website_scraper.py"
     ]))
     return {"status": "started"}
 
@@ -97,22 +97,30 @@ async def run_web_scraper():
 # ---------------------------------------
 @app.post("/run-facebook-scraper")
 async def run_fb_scraper():
-    # Determine Sheet ID
+    sheet = None
+
     if SHEET_ID_ENV:
         sheet = SHEET_ID_ENV
+    elif os.path.exists(SHEET_ID_FILE):
+        with open(SHEET_ID_FILE) as f:
+            sheet = f.read().strip()
     else:
-        if os.path.exists(SHEET_ID_FILE):
-            with open(SHEET_ID_FILE) as f:
-                sheet = f.read().strip()
-        else:
-            return {"status": "error", "message": "Sheet ID not set"}
+        return {"status": "error", "message": "Sheet ID not set"}
+
+    script = os.path.join("/app", "node_scripts", "facebook_scraper.js")
+    key_file = os.path.join("/app", "service_account.json")
+
+    if not os.path.exists(script):
+        return {"status": "error", "message": "FB script missing in container"}
 
     asyncio.create_task(stream_logs([
-        "node", "node_scripts/facebook_scraper.js",
-        "--key=service_account.json",
+        "node", script,
+        f"--key={key_file}",
         f"--sheet={sheet}"
     ]))
+
     return {"status": "started"}
+
 
 # ---------------------------------------
 # Run Email Filter (Python)
@@ -120,7 +128,7 @@ async def run_fb_scraper():
 @app.post("/run-email-filter")
 async def run_filter():
     asyncio.create_task(stream_logs([
-        "python", "python_scripts/run_email_filter.py"
+        "python", "/app/python_scripts/run_email_filter.py"
     ]))
     return {"status": "started"}
 
